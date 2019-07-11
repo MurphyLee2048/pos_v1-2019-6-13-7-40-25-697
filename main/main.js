@@ -86,3 +86,12 @@ const isDiscount = (barcode) => {
     }
     return false;
 };
+
+const getInfo = (barcode) => {
+    const allItems = loadAllItems();  // TODO: allItems可以全局化
+    for (let i = 0; i < allItems.length; i++) {
+        if (barcode === allItems[i].barcode) {
+            return allItems[i];
+        }
+    }
+};
