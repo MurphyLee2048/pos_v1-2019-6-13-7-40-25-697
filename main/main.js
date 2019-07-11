@@ -1,80 +1,64 @@
 'use strict';
-const loadAllItems = require('../__test__/fixtures').loadAllItems;
-const loadPromotions = require('../__test__/fixtures').loadPromotions;
-
-function printReceipt(tags) {
-    return `***<没钱赚商店>收据***
-名称：雪碧，数量：5瓶，单价：3.00(元)，小计：12.00(元)
-名称：荔枝，数量：2.5斤，单价：15.00(元)，小计：37.50(元)
-名称：方便面，数量：3袋，单价：4.50(元)，小计：9.00(元)
-----------------------
-总计：58.50(元)
-节省：7.50(元)
-**********************`;
-}
+const loadAllItems = require('../__tests__/fixtures').loadAllItems;
+const loadPromotions = require('../__tests__/fixtures').loadPromotions;
 
 function isValid(tags) {
     for (let i = 0; i < tags.length; i++) {
-        if (isBarcodeValid(tags[i].substr(0, 10)) === false) {
+        if (isSingleValid(tags[i].substr(0, 10)) === false) {
 
             return false;
         }
     }
     return true;
-}；
+}
 
-const isBarcodeValid = (tag) => {
+const isSingleValid = (barcode) => {
     const allItems = loadAllItems();  // TODO: allItems可以全局化
     for (let i = 0; i < allItems.length; i++) {
-        if (tag === allItems[i].barcode) {
-
+        if (barcode === allItems[i].barcode) {
             return true;
         }
     }
     return false;
 };
 
-const splitTag = (tag) => {
-    let barcode = "";
-    let count = 1;
-    if (tag.indexOf('-') === -1) {
-        barcode = tag;
-    } else {
-        let tmp = tag.split('-');
-        barcode = tmp[0];
-        count = Number(tmp[1]);
+const splitTag = (tags) => {
+    let spiltedTags = [];
+    for (let i = 0; i < tags.length; i++) {
+        if (tags[i].indexOf('-') === -1) {
+            spiltedTags.push({"barcode":tags[i], "count":1});
+        }
+        else {
+            spiltedTags.push({"barcode":tags[i].substr(0, 10), "count": Number(tags[i].substr(11))});
+        }
     }
-    return {"barcode": barcode, "count": count};
+    return spiltedTags;
 };
 
 const dereplication = (splitedTags) => {
+    let dereplicatedTags = [];
     let map = new Map();
     for (let i = 0; i < splitedTags.length; i++) {
-
-        let tmpStr = splitedTags[i].barcode;
-        if (map.has(tmpStr)) {
-            map.set(tmpStr, map.get(tmpStr) + splitedTags[i].count);
-        } else {
-            map.set(tmpStr, splitedTags[i].count);
+        if (map.has(splitedTags[i].barcode)) {
+            map.set(splitedTags[i].barcode, splitedTags[i].count + map.get(splitedTags[i].barcode));
+        }else {
+            map.set(splitedTags[i].barcode, splitedTags[i].count);
         }
     }
-    let dereplicatedTags = [];
     for (var [key, value] of map.entries()) {
         dereplicatedTags.push({"barcode": key, "count": value})
     }
-
     return dereplicatedTags;
 
 };
 
-const doCount = (tags) => {
-    let splitedTags = [];
-    for (let i = 0; i < tags.length; i++) {
-        splitedTags.push(splitTag(tags[i]));
-
+const getInfo = (barcode) => {
+    const allItems = loadAllItems();  // TODO: allItems可以全局化
+    for (let i = 0; i < allItems.length; i++) {
+        if (barcode === allItems[i].barcode) {
+            return allItems[i];
+        }
     }
-
-    return dereplication(splitedTags);
 };
 
 const isDiscount = (barcode) => {
@@ -87,11 +71,70 @@ const isDiscount = (barcode) => {
     return false;
 };
 
-const getInfo = (barcode) => {
-    const allItems = loadAllItems();  // TODO: allItems可以全局化
-    for (let i = 0; i < allItems.length; i++) {
-        if (barcode === allItems[i].barcode) {
-            return allItems[i];
+const getPrice = (dereplicatedTags) => {
+    let receiptItems = [];
+    for ( let i = 0; i < dereplicatedTags.length; i++) {
+        let metaItem = getInfo(dereplicatedTags[i].barcode);
+        let subTotal = 0;
+        if (isDiscount(dereplicatedTags[i].barcode)) {
+            subTotal = metaItem.price * dereplicatedTags[i].count - Math.floor(dereplicatedTags[i].count / 3) * metaItem.price;
+        } else {
+            subTotal = metaItem.price * dereplicatedTags[i].count;
         }
+        receiptItems.push({"name": metaItem.name, "count": dereplicatedTags[i].count, "price":metaItem.price, "unit": metaItem.unit, "subTotal": subTotal});
     }
+    return receiptItems;
+};
+
+const calculateTotalDiscount = (receiptItems) => {
+    let totalPrice = 0;
+    let sumOriginalPrice = 0;
+    for (let i = 0; i < receiptItems.length; i++) {
+        sumOriginalPrice += receiptItems[i].price * receiptItems[i].count;
+        totalPrice += receiptItems[i].subTotal;
+    }
+    let totalDiscount = sumOriginalPrice - totalPrice;
+    return {"receiptItems":receiptItems, "totalPrice": totalPrice, "totalDiscount": totalDiscount};
+};
+
+const generateRecord = (tags) => {
+  let splitedTags = splitTag(tags);
+  let dereplicatedTags = dereplication(splitedTags);
+  let receiptItems = getPrice(dereplicatedTags);
+  let receiptData = calculateTotalDiscount(receiptItems);
+  return receiptData;
+};
+
+const getText = (receiptData) => {
+    let header = "***<没钱赚商店>收据***\n";
+    let body = "";
+    for (let i = 0; i < receiptData.receiptItems.length; i++) {
+        let tmp = "名称：" + receiptData.receiptItems[i].name + "，数量：" + receiptData.receiptItems[i].count + receiptData.receiptItems[i].unit + "，单价：" + receiptData.receiptItems[i].price.toFixed(2) + "(元)，小计：" + receiptData.receiptItems[i].subTotal.toFixed(2) + "(元)\n";
+        body += tmp;
+    }
+    let footer = "----------------------\n";
+    let totalPrice = "总计：" + receiptData.totalPrice.toFixed(2) + "(元)\n";
+    let totalDiscount = "节省：" + receiptData.totalDiscount.toFixed(2) + "(元)\n";
+    let stars = "**********************";
+    return header + body + footer + totalPrice + totalDiscount + stars;
+};
+
+const printReceipt = (tags) => {
+    if (isValid(tags)) {
+        let receiptData = generateRecord(tags);
+        let expectText = getText(receiptData);
+        console.log(expectText);
+        return expectText;
+    } else {
+        return null;
+    }
+};
+
+module.exports = {
+    printReceipt: printReceipt,
+    isValid: isValid,
+    splitTag: splitTag,
+    dereplication: dereplication,
+    isDiscount:isDiscount,
+    getInfo: getInfo,
 };
