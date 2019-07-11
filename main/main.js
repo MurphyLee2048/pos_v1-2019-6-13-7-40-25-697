@@ -76,3 +76,13 @@ const doCount = (tags) => {
 
     return dereplication(splitedTags);
 };
+
+const isDiscount = (barcode) => {
+    let promotions = loadPromotions()[0].barcodes;  // TODO:全局化？
+    for (let i = 0; i < promotions.length; i++) {
+        if (barcode === promotions[i]) {
+            return true;
+        }
+    }
+    return false;
+};
