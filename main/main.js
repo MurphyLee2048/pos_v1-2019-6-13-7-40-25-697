@@ -21,7 +21,7 @@ function isValid(tags) {
         }
     }
     return true;
-}
+}；
 
 const isBarcodeValid = (tag) => {
     const allItems = loadAllItems();  // TODO: allItems可以全局化
@@ -32,4 +32,47 @@ const isBarcodeValid = (tag) => {
         }
     }
     return false;
+};
+
+const splitTag = (tag) => {
+    let barcode = "";
+    let count = 1;
+    if (tag.indexOf('-') === -1) {
+        barcode = tag;
+    } else {
+        let tmp = tag.split('-');
+        barcode = tmp[0];
+        count = Number(tmp[1]);
+    }
+    return {"barcode": barcode, "count": count};
+};
+
+const dereplication = (splitedTags) => {
+    let map = new Map();
+    for (let i = 0; i < splitedTags.length; i++) {
+
+        let tmpStr = splitedTags[i].barcode;
+        if (map.has(tmpStr)) {
+            map.set(tmpStr, map.get(tmpStr) + splitedTags[i].count);
+        } else {
+            map.set(tmpStr, splitedTags[i].count);
+        }
+    }
+    let dereplicatedTags = [];
+    for (var [key, value] of map.entries()) {
+        dereplicatedTags.push({"barcode": key, "count": value})
+    }
+
+    return dereplicatedTags;
+
+};
+
+const doCount = (tags) => {
+    let splitedTags = [];
+    for (let i = 0; i < tags.length; i++) {
+        splitedTags.push(splitTag(tags[i]));
+
+    }
+
+    return dereplication(splitedTags);
 };
